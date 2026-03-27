@@ -13,13 +13,14 @@ The scripts automate the official APIM trace workflow:
 
 These scripts are based on Microsoft Learn guidance:
 
-- https://learn.microsoft.com/en-us/azure/api-management/api-management-howto-api-inspector
+- [APIM API Inspector guidance](https://learn.microsoft.com/en-us/azure/api-management/api-management-howto-api-inspector)
 
 ## Files
 
 - `scripts/apim-debug.sh`: Bash script for Git Bash, WSL, or Linux/macOS shells.
 - `scripts/apim-debug.ps1`: PowerShell script for Windows/PowerShell users.
 - `scripts/apim-debug.http`: VS Code REST Client sequence to run the same flow interactively.
+- `scripts/apim-debug.env.example`: Template for shared environment values.
 
 ## Prerequisites
 
@@ -47,29 +48,52 @@ az apim api list --resource-group <resource-group> --service-name <apim-name> -o
 
 Use the API name/identifier value from the output for `API_ID` / `ApiId`.
 
+## Environment Values Reference
+
+These values are defined in `scripts/apim-debug.env` (copied from `scripts/apim-debug.env.example`).
+
+| Value | Required | Description | Example |
+| --- | --- | --- | --- |
+| `SUBSCRIPTION_ID` | Yes | Azure subscription GUID that contains the APIM instance. | `11111111-2222-3333-4444-555555555555` |
+| `RESOURCE_GROUP` | Yes | Resource group name where the APIM service is deployed. | `rg-api-prod` |
+| `APIM_NAME` | Yes | APIM service name (not display name). | `contoso-apim-prod` |
+| `API_ID` | Yes | APIM API identifier under the APIM service. This must match the API being called. | `petstore-v1` |
+| `GATEWAY_URL` | Yes | Full APIM **gateway/proxy** base URL including protocol, without trailing API path. Use `*.azure-api.net` (or your custom proxy host), not `*.developer.azure-api.net`. | `https://contoso-apim-prod.azure-api.net` |
+| `SUBSCRIPTION_KEY` | Yes | APIM subscription key used to invoke the API operation. Treat as a secret. | `<primary-or-secondary-key>` |
+| `API_PATH` | No | Operation path appended to `GATEWAY_URL`. Defaults to `/pet/1` when omitted. | `/pet/1` |
+| `REQUEST_METHOD` | No | HTTP method for the gateway call. Supported values: `GET`, `POST`, `PUT`, `DELETE`, `PATCH`. Defaults to `GET`. | `POST` |
+| `REQUEST_BODY` | No | Request payload sent when body is needed. Leave empty for bodyless requests. | `{"id":1,"name":"fido"}` |
+
+Notes:
+
+- Bash script behavior: values are read from `scripts/apim-debug.env` by default, and you can change the file path with `ENV_FILE`.
+- PowerShell script behavior: values are read from `scripts/apim-debug.env` by default, and you can change the file path with `-EnvFile`.
+- Command-line and inline overrides still work for single runs and take precedence over file defaults.
+
 ## Usage
 
 ### 1) Bash script
 
-Set required environment variables and run:
+Create a local environment file once, then run:
 
 ```bash
-cd c:/Repos/az-apim-debug
+cd c:/Repos/azure-apim-debug
+cp scripts/apim-debug.env.example scripts/apim-debug.env
+# Edit scripts/apim-debug.env with your values.
+
 chmod +x scripts/apim-debug.sh
 
-export SUBSCRIPTION_ID="<subscription-id>"
-export RESOURCE_GROUP="<resource-group>"
-export APIM_NAME="<apim-name>"
-export API_ID="<api-id>"
-export GATEWAY_URL="https://<apim-name>.azure-api.net"
-export SUBSCRIPTION_KEY="<subscription-key>"
-
-# Optional
-export API_PATH="/pet/1"
-export REQUEST_METHOD="GET"
-# export REQUEST_BODY='{"sample":"value"}'
-
 ./scripts/apim-debug.sh
+```
+
+Optional overrides:
+
+```bash
+# Override values for one run
+API_PATH="/pet/2" REQUEST_METHOD="GET" ./scripts/apim-debug.sh
+
+# Use a different env file
+ENV_FILE="./scripts/apim-debug.dev.env" ./scripts/apim-debug.sh
 ```
 
 Output:
@@ -79,27 +103,26 @@ Output:
 
 ### 2) PowerShell script
 
-Run with required parameters:
+Create a local environment file once, then run:
 
 ```powershell
-cd c:\Repos\az-apim-debug
+cd c:\Repos\azure-apim-debug
+Copy-Item .\scripts\apim-debug.env.example .\scripts\apim-debug.env
+# Edit .\scripts\apim-debug.env with your values.
 
-.\scripts\apim-debug.ps1 `
-  -SubscriptionId "<subscription-id>" `
-  -ResourceGroup "<resource-group>" `
-  -ApimName "<apim-name>" `
-  -ApiId "<api-id>" `
-  -GatewayUrl "https://<apim-name>.azure-api.net" `
-  -ApiPath "/pet/1" `
-  -SubscriptionKey "<subscription-key>" `
-  -Method GET
+.\scripts\apim-debug.ps1
 ```
 
-Optional for body-based methods:
+Optional overrides:
 
 ```powershell
--Method POST -RequestBody '{"sample":"value"}'
+.\scripts\apim-debug.ps1 -Method POST -RequestBody '{"sample":"value"}'
+
+# Use a different env file
+.\scripts\apim-debug.ps1 -EnvFile .\scripts\apim-debug.dev.env
 ```
+
+Any parameter can still be passed directly to override the env file for a single run.
 
 Output:
 
@@ -130,5 +153,6 @@ Output:
 
 ## Security Hygiene
 
-- Add `apim-trace.json` to `.gitignore` if you plan to run frequently.
+- Keep `scripts/apim-debug.env` local only. It contains secrets and should not be committed.
+- `apim-trace.json` can contain sensitive data; keep it out of source control.
 - Avoid sharing trace files in tickets/chats without redacting secrets.

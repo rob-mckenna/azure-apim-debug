@@ -1,6 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ENV_FILE="${ENV_FILE:-${SCRIPT_DIR}/apim-debug.env}"
+
+if [[ -f "$ENV_FILE" ]]; then
+  set -a
+  # shellcheck disable=SC1090
+  . "$ENV_FILE"
+  set +a
+fi
+
 # Required env vars:
 # SUBSCRIPTION_ID RESOURCE_GROUP APIM_NAME API_ID GATEWAY_URL SUBSCRIPTION_KEY
 # Optional env vars:
@@ -21,6 +31,17 @@ REQUEST_BODY="${REQUEST_BODY:-}"
 if [[ -z "$SUBSCRIPTION_ID" || -z "$RESOURCE_GROUP" || -z "$APIM_NAME" || -z "$API_ID" || -z "$GATEWAY_URL" || -z "$SUBSCRIPTION_KEY" ]]; then
   echo "Missing required env vars."
   echo "Set: SUBSCRIPTION_ID RESOURCE_GROUP APIM_NAME API_ID GATEWAY_URL SUBSCRIPTION_KEY"
+  exit 1
+fi
+
+if [[ "$GATEWAY_URL" == *"your-apim-name.azure-api.net"* || "$GATEWAY_URL" == *"<your-apim-gateway-hostname>"* ]]; then
+  echo "GATEWAY_URL appears to be a placeholder: $GATEWAY_URL"
+  echo "Set GATEWAY_URL in ${ENV_FILE} to your APIM gateway URL (for example: https://${APIM_NAME}.azure-api.net)."
+  exit 1
+fi
+
+if [[ ! "$GATEWAY_URL" =~ ^https?:// ]]; then
+  echo "GATEWAY_URL must start with http:// or https://"
   exit 1
 fi
 
@@ -71,7 +92,7 @@ else
     -D "$RESP_HEADERS" -o "$RESP_BODY"
 fi
 
-TRACE_ID="$(grep -i '^Apim-Trace-Id:' "$RESP_HEADERS" | awk '{print $2}' | tr -d '\r')"
+TRACE_ID="$(grep -i '^Apim-Trace-Id:' "$RESP_HEADERS" | awk '{print $2}' | tr -d '\r' || true)"
 
 if [[ -z "$TRACE_ID" ]]; then
   echo "Trace ID not found. Check these headers from the gateway response:"
@@ -79,6 +100,8 @@ if [[ -z "$TRACE_ID" ]]; then
   grep -i '^Apim-Debug-Authorization-WrongAPI:' "$RESP_HEADERS" || true
   echo "Full response headers:"
   cat "$RESP_HEADERS"
+  echo "Response body:"
+  cat "$RESP_BODY"
   exit 1
 fi
 

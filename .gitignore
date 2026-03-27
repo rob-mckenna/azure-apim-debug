@@ -1,0 +1,6 @@
+# Local environment settings with secrets
+scripts/apim-debug.env
+
+# APIM trace output may contain sensitive data
+apim-trace.json
+scripts/apim-trace.json
