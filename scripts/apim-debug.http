@@ -1,0 +1,56 @@
+@subscriptionId = <your-subscription-id>
+@resourceGroup = <your-resource-group>
+@apimName = <your-apim-service-name>
+@tenantId = <your-tenant-id>
+@clientId = <app-registration-client-id>
+@clientSecret = <app-registration-client-secret>
+@apiId = <api-id-not-display-name>
+@gatewayHost = <your-apim-gateway-hostname>
+@apiEndPoint = https://<your-apim-gateway-hostname>/pet/1
+@subscriptionKey = <api-subscription-key>
+@requestBody = {}
+
+### Get ARM token
+# @name login
+POST https://login.microsoftonline.com/{{tenantId}}/oauth2/token
+content-type: application/x-www-form-urlencoded
+
+grant_type=client_credentials&client_id={{clientId}}&client_secret={{clientSecret}}&resource=https%3A%2F%2Fmanagement.azure.com%2F
+
+###
+@authToken = {{login.response.body.$.access_token}}
+
+### Get debug token
+# @name listDebugCredentials
+POST https://management.azure.com/subscriptions/{{subscriptionId}}/resourceGroups/{{resourceGroup}}/providers/Microsoft.ApiManagement/service/{{apimName}}/gateways/managed/listDebugCredentials?api-version=2023-05-01-preview
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "credentialsExpireAfter": "PT1H",
+  "apiId": "/subscriptions/{{subscriptionId}}/resourceGroups/{{resourceGroup}}/providers/Microsoft.ApiManagement/service/{{apimName}}/apis/{{apiId}}",
+  "purposes": ["tracing"]
+}
+
+###
+@debugToken = {{listDebugCredentials.response.body.$.token}}
+
+### Call API with tracing header
+# @name callApi
+GET {{apiEndPoint}} HTTP/1.1
+Host: {{gatewayHost}}
+Apim-Debug-Authorization: {{debugToken}}
+Ocp-Apim-Subscription-Key: {{subscriptionKey}}
+
+###
+@traceId = {{callApi.response.headers.Apim-Trace-Id}}
+
+### Retrieve trace payload
+# @name getTrace
+POST https://management.azure.com/subscriptions/{{subscriptionId}}/resourceGroups/{{resourceGroup}}/providers/Microsoft.ApiManagement/service/{{apimName}}/gateways/managed/listTrace?api-version=2024-06-01-preview
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "traceId": "{{traceId}}"
+}
